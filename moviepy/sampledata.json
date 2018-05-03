@@ -1,0 +1,33 @@
+{
+  "tpl": 1,
+  "scenes": [
+    {
+      "type": "headline",
+      "trans": "fade",
+      "params": {
+        "text1": "INTRODUCING",
+        "text2": "UKAD TALEB",
+        "bgcolor": "#CCCCCC",
+        "txtcolor": "#222222"
+      }
+    },
+    {
+      "type": "videoout",
+      "trans": "slideright",
+      "params": {
+        "video": "./LM2016Collection.mp4",
+        "range": [20,27]
+      }
+    },
+    {
+      "type": "headline",
+      "trans": "fade",
+      "params": {
+        "text1": "SO WHAT?",
+        "text2": "GET ONE NOW!",
+        "bgcolor": "#fe9600",
+        "txtcolor": "#f0f0f0"
+      }
+    }
+  ]
+}
