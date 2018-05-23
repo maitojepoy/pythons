@@ -84,6 +84,13 @@ class CoreTemplate(object):
 		self.allimages.append(fname)
 		return fname
 
+	def getEquivSize(self,vals,sidew='w'):
+		if isinstance(vals,list) or isinstance(vals,tuple):
+			return (np.array(vals) * np.array(self.sz)).astype('uint').tolist()
+		else:
+			fromsz = self.sz[0] if sidew=='w' else self.sz[1]
+			return int(arr_vals[0] * fromsz)
+
 	def truncate_string(self,strd,chlen=150):
 		return (strd[:150] + '..') if len(strd) > 250 else strd
 

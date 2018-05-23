@@ -11,6 +11,7 @@ from moviepy.video.tools.drawing import color_gradient
 from moviepy.editor import *
 import easing as eas
 import numpy as np
+import math
 
 def gcd(a,b):
 	if b==0:
@@ -22,8 +23,8 @@ def aspect_ratio(w,h):
 	return w/cd,h/cd
 
 def basis_crop(size1,size2):
-	w1, w2 = size1
-	h1, h2 = size2
+	w1, h1 = np.array(size1).astype('float').tolist()
+	w2, h2 = np.array(size2).astype('float').tolist()
 	i1 = aspect_ratio(w1,h1)
 	i2 = aspect_ratio(w2,h2)
 	diffw = i1[0]-i2[0]
@@ -66,6 +67,25 @@ def flip_clip(clip,dir='h'):
 	else:
 		return clip.fx(vfx.mirror_y)
 
+def fade_it(clip,to='in',easefxn=None,dur=0.5):
+	if easefxn==None:
+		easefxn = eas.easeOutQuad
+	if to=='in':
+		i = 0.
+		o = 1.
+	else:
+		i = 1.
+		o = 0.
+	def fl(gf, t):
+		v = eas.tween(easefxn, t, i, o-i, dur) if to=='in' else eas.tranOut(clip.duration,easefxn,t,i,o-i,dur)
+		f = gf(t)
+		om = np.zeros(f.shape)
+		om[:,:] = 1-v
+		return np.clip(f-om,0.,1.)
+
+	clip.mask = clip.mask.fl(fl)
+	return clip
+
 def create_linear_mask_clip(lsz,dir='r'):
 	if dir == 'r' or dir == 'l':
 		dh = lsz[0]/3
@@ -92,47 +112,74 @@ def create_linear_mask_clip(lsz,dir='r'):
 
 	return ImageClip(grad,ismask=True)
 
-def clip_brush_fade_in(clip,dir='r',dur=0.5,easefxn=None):
-	if easefxn == None:
-		easefxn = eas.easeOutExpo
-	csize = clip.size
-	#create mask
+def clip_brush_fade_in(clip,easefxn=None,dur=0.5,dir='r'):
+	efxn = eas.easeOutExpo if easefxn == None else easefxn
+	w, h = clip.size
+	stx = 0
+	edx = 0
+	dtype = ''
 	if dir == 'r' or dir == 'l':
-		msize = (csize[0]*3,csize[1])
-		rd = csize[0]
-	else:
-		msize = (csize[0],csize[1]*3)
-		rd = csize[1]
-	themask = create_linear_mask_clip(msize,dir)
-
-	#grad = color_gradient(moving_txt.size,p1=(0,2*h/3),
-	#            p2=(0,h/4),col1=0.0,col2=1.0)
-	#gradmask = ImageClip(grad,ismask=True)
-
-	#let us make animation - using the mask mismo
-	rpt = -rd*2
-	lpt = 0
-	if dir == 'r' or dir == 'l':
+		dtype = 'h'
+		wsz = (w*3,h)
+		dhh = wsz[0]
+		dh = w
+		ph1 = (dh*1,0)
+		ph2 = (dh*2,0)
 		if dir == 'r':
-			maskanim = themask.set_pos( lambda a: ( easefxn(a, rpt, lpt-rpt, dur ), 0))
+			c1 = 0
+			c2 = 1.0
+			stx = dhh - dh
+			edx = 0
 		else:
-			maskanim = themask.set_pos( lambda a: ( easefxn(a, lpt, rpt-lpt, dur ), 0))
+			c1 = 1.0
+			c2 = 0
+			stx = 0
+			edx = dhh - dh
 	elif dir == 'u' or dir == 'd':
+		dtype = 'v'
+		wsz = (w,h*3)
+		dhh = wsz[1]
+		dh = h
+		ph1 = (0,dh*1)
+		ph2 = (0,dh*2)
 		if dir == 'u':
-			maskanim = themask.set_pos( lambda a: ( 0, easefxn(a, rpt, lpt-rpt, dur )))
+			c1 = 1.
+			c2 = 0
+			stx = 0
+			edx = dhh - dh
 		else:
-			maskanim = themask.set_pos( lambda a: ( 0, easefxn(a, lpt, rpt-lpt, dur )))
+			c1 = 0
+			c2 = 1.
+			stx = dhh - dh
+			edx = 0
+			
+	mgrad = color_gradient(wsz, p1=ph1, p2=ph2, col1=c1, col2=c2)
+	
+	chx = edx - stx
+	
+	def fl(gf, t):
+		curx = eas.tween(efxn, t, stx, chx, dur)
+		curg = mgrad[:,int(curx):int(curx+dh)] if dtype=='h' else mgrad[int(curx):int(curx+dh),:]
+		f = gf(t)
+		om = np.zeros(f.shape)
+		om[:,:] = 1-curg
+		return np.clip(f-om,0.,1.)
 
-	maskappl = CompositeVideoClip([maskanim], size=csize, ismask=True)
-
-	return CompositeVideoClip([clean_after_mask(clip.set_mask(maskappl))], size=csize)
+	if clip.mask is None:
+		clip = clip.add_mask()
+	clip.mask = clip.mask.fl(fl)
+	return clip
 
 def clean_after_mask(clip):
 	return clip.fx(vfx.mask_color, color=(0,0,0))
 
 def center_crop(img, size):
 		newsize = dim_resize(img.size,size)
-		return img.resize(newsize).fx(vfx.crop,x_center=newsize[0]/2,y_center=newsize[1]/2,width=size[0],height=size[1])
+		res = img.resize(newsize)
+		if res.size[0]==res.size[1]:
+			return res
+		else:
+			return res.fx(vfx.crop,x_center=newsize[0]/2,y_center=newsize[1]/2,width=size[0],height=size[1])
 
 def create_boxtwist(clip,dur=0.5,easefxn=None):
 	if easefxn == None:
@@ -182,14 +229,12 @@ def flex_flow(clips, dir='h', gap=0, return_as='array'):
 	return nclips if return_as is 'array' else CompositeVideoClip(nclips,size=lesize)
 
 def makeboxborder(color,bsize,thick=3):
-    w, h = bsize
-    shape = (h, w)
-    dm = np.zeros(shape)
-    dm[:,:] = 1
-    dm[thick:h-thick,thick:w-thick] = 0
-    i = ImageClip(dm,ismask=True)
-    c = ColoredClip((w,h),color)
-    return c.set_mask(i)
+	w, h = bsize
+	shape = (h, w) if np.isscalar(color) else (h,w,len(color))
+	dm = np.zeros(shape)
+	dm[:,:] = color
+	dm[thick:h-thick,thick:w-thick] = 0
+	return ImageClip(dm.astype('uint8'))
 
 def makediagboxborder(color,bsize,thick=3):
     w, h = bsize
@@ -217,6 +262,16 @@ def makediagsquare(sqsize,top_color,bottom_color):
 			if mrkd==1:
 				dm[x, y] = bottom_color
 	return ImageClip(dm.astype('uint8'))
+
+def ImageTileClip(imgclip,size):
+	imgnp = imgclip.get_frame(0)
+	imgmsk = imgclip.mask.get_frame(0)
+	w, h = size
+	rep = map(lambda a: int(math.ceil(a)),(np.array(size).astype('float')/np.array(imgclip.size))[::-1].tolist())
+	imgl = np.tile(imgnp,rep+[1])
+	imgm = np.tile(imgmsk,rep)
+	imm = ImageClip(imgm[:h,:w],ismask=True)
+	return ImageClip(imgl[:h,:w].astype('uint8')).set_mask(imm)
 
 # Another class for ColorClip so I call it ColoredClip. 
 # this has "astype" at the end of numpy array generation (compatible with PIL image rotate)
