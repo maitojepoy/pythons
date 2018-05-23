@@ -25,14 +25,12 @@ def aspect_ratio(w,h):
 def basis_crop(size1,size2):
 	w1, h1 = np.array(size1).astype('float').tolist()
 	w2, h2 = np.array(size2).astype('float').tolist()
-	i1 = aspect_ratio(w1,h1)
-	i2 = aspect_ratio(w2,h2)
-	diffw = i1[0]-i2[0]
-	diffh = i1[1]-i2[1]
+	diffw = w2-w1
+	diffh = h2-h1
 	if diffw > diffh:
-		return 'h'
-	else:
 		return 'w'
+	else:
+		return 'h'
 
 def _dim_resize_value(size,val,baseon='w'):
 	if baseon=='w':
